@@ -1,15 +1,12 @@
-# =====================================================================
-# app.py — DV Lottery Photo Checker & Auto-Fixer (Flask backend)
-# =====================================================================
 import os
 import io
 import time
 import uuid
 import gc
-import base64  # <--- أضفنا هذه المكتبة لتحويل الصورة إلى Base64
+import base64
 
 from flask import Flask, request, jsonify, render_template
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageDraw
 import numpy as np
 import cv2
 
@@ -17,7 +14,7 @@ cv2.setNumThreads(1)
 
 try:
     if os.environ.get("DISABLE_REMBG", "0") == "1":
-        raise ImportError("rembg disabled via DISABLE_REMBG env var")
+        raise ImportError("rembg disabled")
     from rembg import remove as rembg_remove
     REMBG_AVAILABLE = True
 except Exception:
@@ -31,8 +28,10 @@ ALLOWED_EXT   = {"jpg", "jpeg", "png", "webp", "bmp", "tif", "tiff"}
 MAX_CONTENT   = 16 * 1024 * 1024
 TARGET_SIZE   = 600
 MAX_BYTES     = 240 * 1024
-HEAD_TARGET   = 0.60
-HEAD_TOP_POS  = 0.10
+
+# تقليل النسبة إلى 55% لتبدو الصورة طبيعية أكثر
+HEAD_TARGET   = 0.55 
+HEAD_TOP_POS  = 0.10 
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT
@@ -114,9 +113,33 @@ def encode_jpeg_under_limit(pil_img, limit=MAX_BYTES):
         if len(data) <= limit: return data, q
     return data, 20
 
+def draw_guides(pil_img, face_box):
+    """رسم الخطوط الإرشادية على الصورة لإثبات التعديل"""
+    draw = ImageDraw.Draw(pil_img)
+    
+    if face_box:
+        x, y, w, h = face_box
+        head_top = int(y - 0.5 * h)
+        head_bottom = int(y + 1.0 * h) # الذقن التقريبي
+        eye_level = int(y + 0.5 * h)
+        
+        # خط أحمر لبداية الرأس
+        draw.line([(0, head_top), (TARGET_SIZE, head_top)], fill="red", width=3)
+        # خط أحمر لنهاية الذقن
+        draw.line([(0, head_bottom), (TARGET_SIZE, head_bottom)], fill="red", width=3)
+        # خط أخضر لمستوى العينين
+        draw.line([(0, eye_level), (TARGET_SIZE, eye_level)], fill="lime", width=3)
+        
+        # رسم مستطيل حول الوجه
+        draw.rectangle([x, y, x+w, y+h], outline="blue", width=2)
+
+    # رسم إطار الصورة 600x600
+    draw.rectangle([0, 0, TARGET_SIZE-1, TARGET_SIZE-1], outline="black", width=4)
+    return pil_img
+
 def process_photo(pil_img, original_bytes_len, original_format):
     try:
-        issues, actions, metrics = [], [], {}
+        issues, actions = [], []
         img = ImageOps.exif_transpose(pil_img).convert("RGB")
         ow, oh = img.size
         
@@ -147,17 +170,29 @@ def process_photo(pil_img, original_bytes_len, original_format):
         h2, w2 = bgr2.shape[:2]
         face = detect_face(bgr2)
 
+        face_out = None
         if face:
             fx, fy, fw, fh = face
             head_top = fy - 0.5 * fh
             head_height = 1.55 * fh 
             crop_size = max(head_height / HEAD_TARGET, 300)
             crop_size = min(crop_size, max(w2, h2) * 1.5) 
+            
             center_x = fx + fw / 2.0
             left = center_x - crop_size / 2.0
             top = head_top - HEAD_TOP_POS * crop_size
+            
             crop = crop_square_with_padding(bgr2, left, top, crop_size)
             actions.append("head_adjusted")
+            
+            # حساب مكان الوجه في الصورة الجديدة 600x600
+            s = TARGET_SIZE / float(crop_size)
+            face_out = (
+                int((fx - left) * s), 
+                int((fy - top) * s), 
+                int(fw * s), 
+                int(fh * s)
+            )
         else:
             issues.append("face_not_found")
             side = min(h2, w2)
@@ -175,12 +210,18 @@ def process_photo(pil_img, original_bytes_len, original_format):
         crop[:, -5:] = 255
 
         final_img = Image.fromarray(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
-        jpeg_bytes, quality = encode_jpeg_under_limit(final_img, MAX_BYTES)
         
+        # إرسال نسختين: واحدة نظيفة وواحدة بالخطوط
+        clean_img = final_img.copy()
+        guide_img = draw_guides(final_img.copy(), face_out)
+
+        clean_bytes, quality = encode_jpeg_under_limit(clean_img, MAX_BYTES)
+        guide_bytes, _ = encode_jpeg_under_limit(guide_img, MAX_BYTES * 2) # الخطوط يمكن أن تكون أوضح
+
         actions.append("converted_jpg")
         if original_bytes_len > MAX_BYTES: actions.append("compressed")
 
-        return jpeg_bytes, {
+        return clean_bytes, guide_bytes, {
             "issues": list(dict.fromkeys(issues)), 
             "actions": list(dict.fromkeys(actions)), 
             "compliant": len(issues) == 0
@@ -215,21 +256,20 @@ def api_process():
         return jsonify({"ok": False, "error": "bad_format"}), 400
 
     try:
-        result_bytes, report = process_photo(pil_img, len(raw), pil_img.format)
+        clean_bytes, guide_bytes, report = process_photo(pil_img, len(raw), pil_img.format)
     except Exception as e:
         return jsonify({"ok": False, "error": "server", "detail": str(e)}), 500
     finally:
         del pil_img, raw
         gc.collect()
 
-    # تحويل الصورة إلى Base64 لعرضها وتنزيلها مباشرة بدون حفظها في السيرفر
-    b64_str = base64.b64encode(result_bytes).decode('utf-8')
-    data_uri = f"data:image/jpeg;base64,{b64_str}"
+    clean_b64 = base64.b64encode(clean_bytes).decode('utf-8')
+    guide_b64 = base64.b64encode(guide_bytes).decode('utf-8')
 
     return jsonify({
         "ok": True,
-        "result_url": data_uri,
-        "download_url": data_uri,
+        "result_url": f"data:image/jpeg;base64,{guide_b64}",  # الصورة بالخطوط للمعاينة
+        "download_url": f"data:image/jpeg;base64,{clean_b64}", # الصورة النظيفة للتحميل
         "report": report,
     })
 
