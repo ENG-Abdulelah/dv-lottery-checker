@@ -5,14 +5,14 @@ import os
 import io
 import time
 import uuid
-import gc  # لتفريغ الذاكرة
+import gc  # لتفريغ الذاكرة ومنع انهيار السيرفر
 
 from flask import Flask, request, jsonify, render_template, send_from_directory
 from PIL import Image, ImageOps
 import numpy as np
 import cv2
 
-# تعطيل الخيوط المتعددة في OpenCV لتقليل استهلاك الذاكرة (مهم جداً لـ Render)
+# تعطيل الخيوط المتعددة في OpenCV لتقليل استهلاك الذاكرة (مهم جداً لـ Render المجاني)
 cv2.setNumThreads(1)
 
 # تعطيل rembg إذا تم ضبط متغير البيئة
@@ -25,7 +25,7 @@ except Exception:
     REMBG_AVAILABLE = False
 
 # ---------------------------------------------------------------------
-# Configuration
+# Configuration & Settings
 # ---------------------------------------------------------------------
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -36,20 +36,20 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(RESULT_DIR, exist_ok=True)
 
 ALLOWED_EXT   = {"jpg", "jpeg", "png", "webp", "bmp", "tif", "tiff"}
-MAX_CONTENT   = 16 * 1024 * 1024
-TARGET_SIZE   = 600
-MAX_BYTES     = 240 * 1024
+MAX_CONTENT   = 16 * 1024 * 1024  # 16 MB
+TARGET_SIZE   = 600               # final 600x600
+MAX_BYTES     = 240 * 1024        # < 240 KB
 
-# إعدادات القص (تم تعديلها لإظهار الكتفين)
-HEAD_TARGET   = 0.50  # الرأس يشغل 52% من الصورة
-HEAD_TOP_POS  = 0.10  # المسافة فوق الرأس 8%
+# --- إعدادات القص (تم تعديلها لإظهار الكتفين) ---
+HEAD_TARGET   = 0.50  # الرأس يشغل 50% (الحد الأدنى المسموح لإظهار مساحة واسعة)
+HEAD_TOP_POS  = 0.06  # مسافة 6% فقط فوق الرأس (لإظهار أكبر قدر من الصدر والكتف)
 MAX_AGE_SEC   = 60 * 60
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT
 app.json.ensure_ascii = False
 
-# Haar cascades
+# Haar cascades لكشف الوجه
 FACE_CASCADE = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 
 # =====================================================================
@@ -99,7 +99,7 @@ def analyze_background(bgr):
     }
 
 def make_background_white(img_rgb):
-    """تحويل الخلفية الفاتحة إلى بيضاء نقية دون المساس بالشعر أو الرقبة (خفيف جداً على الذاكرة)"""
+    """تحويل الخلفية الفاتحة إلى بيضاء نقية دون المساس بالشعر أو الرقبة"""
     arr = np.array(img_rgb)
     h, w = arr.shape[:2]
     
@@ -195,8 +195,10 @@ def process_photo(pil_img, original_bytes_len, original_format):
 
         if face:
             fx, fy, fw, fh = face
-            head_top = fy - 0.4 * fh
-            head_height = 1.5 * fh
+            head_top = fy - 0.5 * fh
+            
+            # --- تعديل هام: زيادة مساحة الرأس التقديرية لتوسيع الكادر ---
+            head_height = 1.6 * fh 
             
             crop_size = max(head_height / HEAD_TARGET, 300)
             
@@ -211,7 +213,6 @@ def process_photo(pil_img, original_bytes_len, original_format):
             side = min(h2, w2)
             crop = crop_square_with_padding(bgr2, (w2 - side) / 2.0, (h2 - side) / 2.0, side)
 
-        # مسح الذاكرة المؤقتة قبل عملية التكبير لتجنب الانهيار
         del bgr, bgr2, img
         gc.collect()
 
@@ -220,7 +221,7 @@ def process_photo(pil_img, original_bytes_len, original_format):
         actions.append("resized_600")
         actions.append("lighting_fixed")
 
-        # ضمان بياض الحواف
+        # ضمان أن الحواف بيضاء تماماً
         crop[0:5, :] = 255
         crop[-5:, :] = 255
         crop[:, 0:5] = 255
@@ -241,7 +242,6 @@ def process_photo(pil_img, original_bytes_len, original_format):
             "compliant": len(issues) == 0
         }
     finally:
-        # تنظيف الذاكرة دائماً حتى لو حدث خطأ
         gc.collect()
 
 # =====================================================================
@@ -271,7 +271,7 @@ def api_process():
     try:
         pil_img = Image.open(io.BytesIO(raw))
         pil_img.load()
-        # تصغير الصورة إلى 800x800 كحد أقصى لتجنب انهيار الذاكرة في Render
+        # تصغير الصورة إلى 800x800 كحد أقصى لتجنب انهيار الذاكرة في Render المجاني
         pil_img.thumbnail((800, 800), Image.LANCZOS)
     except Exception:
         return jsonify({"ok": False, "error": "bad_format"}), 400
