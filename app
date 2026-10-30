@@ -8,8 +8,11 @@ Install:
 Run locally:
     python app.py         -> http://127.0.0.1:5000
 
-Production:
-    gunicorn app:app
+Production (Render Docker):
+    gunicorn app:app --bind 0.0.0.0:$PORT
+
+Environment variables:
+    DISABLE_REMBG=1   -> تعطيل rembg واستخدام GrabCut فقط (مطلوب للخطة المجانية)
 """
 
 import os
@@ -24,9 +27,12 @@ import cv2
 
 # ---------------------------------------------------------------------
 # Optional AI background remover (rembg).
-# Falls back to OpenCV GrabCut if not installed.
+# Falls back to OpenCV GrabCut if not installed OR disabled via env.
+# Set DISABLE_REMBG=1 on Render free tier (512MB RAM) to prevent OOM.
 # ---------------------------------------------------------------------
 try:
+    if os.environ.get("DISABLE_REMBG", "0") == "1":
+        raise ImportError("rembg disabled via DISABLE_REMBG env var")
     from rembg import remove as rembg_remove
     REMBG_AVAILABLE = True
 except Exception:
