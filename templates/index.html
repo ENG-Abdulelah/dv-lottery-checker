@@ -32,10 +32,9 @@
             <h1 class="text-2xl font-bold text-blue-600 mb-2">فحص وتعديل صور اللوتري الأمريكي 🇺🇸</h1>
             <p class="text-gray-600 mb-4">قم برفع صورتك الشخصية وسيقوم النظام بفحصها وتعديلها لتكون مطابقة للشروط الرسمية 100%.</p>
             
-            <!-- ملاحظة هامة للمستخدمين -->
             <div class="bg-yellow-50 border-r-4 border-yellow-400 p-4 mb-6 text-sm text-yellow-800 text-right rounded-l-lg">
                 <p class="font-bold mb-1">⚠️ ملاحظة هامة جداً:</p>
-                <p>للحصول على أفضل نتيجة، يرجى رفع صورة تكون مأخوذة من مسافة متوسطة (تظهر الرأس، الرقبة، وجزء من الصدر والكتفين). الصور المأخوذة عن قرب (سيلفي) قد تظهر بحواف مقطوعة بعد القص للحفاظ على النسبة المطلوبة.</p>
+                <p>للحصول على أفضل نتيجة، يرجى رفع صورة تكون مأخوذة من مسافة متوسطة (تظهر الرأس، الرقبة، وجزء من الصدر والكتفين). الصور المأخوذة عن قرب (سيلفي) قد تظهر بحواف مقطوعة.</p>
             </div>
 
             <div class="mb-6">
@@ -67,22 +66,26 @@
         <div id="resultSection" class="bg-white rounded-2xl shadow-xl p-8 text-center hidden">
             <h2 class="text-2xl font-bold text-green-600 mb-4">تم فحص الصورة بنجاح!</h2>
             
-            <!-- المشاكل المكتشفة -->
             <div id="issuesContainer" class="bg-red-50 text-red-700 p-4 rounded-lg mb-6 text-right text-sm hidden">
                 <h3 class="font-bold mb-2">المشاكل التي تم اكتشافها وتعديلها:</h3>
                 <ul id="issuesList" class="list-disc list-inside space-y-1"></ul>
             </div>
 
-            <!-- الصورة المعدلة -->
-            <div class="mb-6">
+            <!-- الصورة مع الخطوط الإرشادية -->
+            <div class="mb-4">
                 <img id="resultImage" src="" alt="الصورة المعدلة" class="w-full h-auto rounded-lg border shadow-sm mx-auto max-w-xs">
+                <!-- مفتاح الخطوط -->
+                <div class="mt-4 text-xs text-gray-600 flex flex-wrap justify-center gap-4 bg-gray-50 p-2 rounded">
+                    <div class="flex items-center gap-1"><span class="w-3 h-3 bg-red-500 block rounded-full"></span> حدود الرأس (50%-69%)</div>
+                    <div class="flex items-center gap-1"><span class="w-3 h-3 bg-green-500 block rounded-full"></span> مستوى العينين</div>
+                    <div class="flex items-center gap-1"><span class="w-3 h-3 bg-blue-500 block rounded-full"></span> إطار الوجه</div>
+                </div>
             </div>
 
-            <!-- أزرار الخيارات -->
-            <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-3 mt-6">
                 <a id="downloadBtn" href="#" download="dv-lottery-photo-600x600.jpg" class="bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                    تحميل الصورة المعدلة (600x600)
+                    تحميل الصورة النظيفة (600x600)
                 </a>
                 <button onclick="resetApp()" class="bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 transition">
                     إلغاء وفحص صورة أخرى
@@ -90,7 +93,6 @@
             </div>
         </div>
         
-        <!-- اسم المطور -->
         <footer class="mt-8 text-center text-gray-500 text-sm">
             <p>تم التطوير بواسطة: <span class="font-bold text-gray-700">المهندس عبدالاله صادق</span></p>
         </footer>
@@ -129,31 +131,18 @@
             formData.append('photo', selectedFile);
 
             try {
-                const response = await fetch('/api/process', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!response.ok) {
-                    throw new Error("السيرفر واجه مشكلة (كود: " + response.status + "). يرجى استخدام صورة بحجم أصغر.");
-                }
-
+                const response = await fetch('/api/process', { method: 'POST', body: formData });
+                if (!response.ok) throw new Error("السيرفر واجه مشكلة (كود: " + response.status + ")");
                 const data = await response.json();
-
-                if (!data.ok) {
-                    throw new Error("خطأ في المعالجة: " + (data.error || 'خطأ غير معروف'));
-                }
+                if (!data.ok) throw new Error("خطأ: " + (data.error || 'غير معروف'));
 
                 clearInterval(progressInterval);
                 progressBar.style.width = '100%';
-
-                setTimeout(() => {
-                    showResults(data);
-                }, 500);
+                setTimeout(() => showResults(data), 500);
 
             } catch (error) {
                 clearInterval(progressInterval);
-                alert("حدث خطأ: " + error.message + "\n\nيرجى المحاولة مرة أخرى أو استخدام صورة أخرى.");
+                alert("حدث خطأ: " + error.message);
                 resetApp();
             }
         }
@@ -162,12 +151,10 @@
             document.getElementById('loadingSection').classList.add('hidden');
             document.getElementById('resultSection').classList.remove('hidden');
 
-            // عرض الصورة باستخدام Base64
+            // عرض الصورة التي تحتوي على الخطوط الإرشادية
             document.getElementById('resultImage').src = data.result_url;
-            
-            // تجهيز رابط التحميل المباشر
-            const downloadLink = document.getElementById('downloadBtn');
-            downloadLink.href = data.download_url;
+            // رابط التحميل للصورة النظيفة
+            document.getElementById('downloadBtn').href = data.download_url;
 
             const issuesContainer = document.getElementById('issuesContainer');
             const issuesList = document.getElementById('issuesList');
@@ -177,14 +164,9 @@
                 'not_jpeg': 'الملف لم يكن بصيغة JPG',
                 'file_too_large': 'حجم الملف تجاوز 240 كيلوبايت',
                 'not_square': 'الصورة لم تكن مربعة',
-                'low_resolution': 'دقة الصورة منخفضة',
                 'bg_not_white': 'الخلفية لم تكن بيضاء نقية',
                 'bg_shadows': 'وجود ظلال في الخلفية',
-                'too_dark': 'الصورة كانت داكنة جداً',
-                'overexposed': 'الصورة كانت مفرطة الإضاءة',
-                'low_contrast': 'الصورة كانت منخفضة التباين',
-                'head_proportion': 'نسبة الرأس لم تكن مناسبة (تم تعديلها)',
-                'face_not_found': 'لم يتم التعرف على الوجه بوضوح (تم القص من المنتصف)'
+                'face_not_found': 'لم يتم التعرف على الوجه بوضوح'
             };
 
             if (data.report.issues && data.report.issues.length > 0) {
