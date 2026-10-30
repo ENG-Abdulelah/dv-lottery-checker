@@ -42,7 +42,7 @@ MAX_BYTES     = 240 * 1024        # < 240 KB
 
 # --- إعدادات القص (توسيع الكادر بأمان) ---
 HEAD_TARGET   = 0.50  # الرأس يشغل 50% (الحد الأدنى المسموح)
-HEAD_TOP_POS  = 0.05  # مسافة 5% فقط فوق الرأس
+HEAD_TOP_POS  = 0.03  # مسافة 5% فقط فوق الرأس
 MAX_AGE_SEC   = 60 * 60
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -197,7 +197,7 @@ def process_photo(pil_img, original_bytes_len, original_format):
             head_top = fy - 0.5 * fh
             
             # توسيع الكادر لإظهار الكتفين
-            head_height = 1.85 * fh 
+            head_height = 1.70 * fh 
             
             crop_size = max(head_height / HEAD_TARGET, 300)
             # حماية السيرفر: منع الكادر من أن يكون أكبر من حجم الصورة بكثير لتجنب انهيار الذاكرة
