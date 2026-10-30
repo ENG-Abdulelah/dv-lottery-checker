@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>فحص وتعديل صور اللوتري الأمريكي</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans min-h-screen flex flex-col items-center justify-center p-4">
+    <div class="bg-white p-8 rounded-2xl shadow-xl max-w-xl w-full text-center">
+        <h1 class="text-2xl font-bold text-blue-600 mb-4">🇺🇸 فحص وتعديل صور اللوتري الأمريكي</h1>
+        <p class="text-gray-600 mb-6">قم برفع صورتك الشخصية وسيقوم النظام بفحصها وتعديلها تلقائياً لتكون مطابقة للشروط الرسمية 100%.</p>
+        
+        <form action="/api/process" method="POST" enctype="multipart/form-data" class="space-y-4">
+            <input type="file" name="photo" accept="image/*" required class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition duration-200">
+                فحص وتعديل الصورة الآن
+            </button>
+        </form>
+    </div>
+</body>
+</html>
