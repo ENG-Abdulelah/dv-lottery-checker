@@ -31,5 +31,5 @@ ENV PORT=10000
 EXPOSE 10000
 
 # استخدام python -m gunicorn لتجنب مشاكل PATH
-//CMD ["sh", "-c", "python -m gunicorn app:app --bind 0.0.0.0:${PORT} --workers 1 --timeout 180 --max-requests 500"]
+#CMD ["sh", "-c", "python -m gunicorn app:app --bind 0.0.0.0:${PORT} --workers 1 --timeout 180 --max-requests 500"]
 CMD ["sh", "-c", "python -m gunicorn app:app --bind 0.0.0.0:10000 --workers 1 --timeout 1000 --max-requests 500"]
