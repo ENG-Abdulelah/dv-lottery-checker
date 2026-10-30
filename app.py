@@ -40,9 +40,9 @@ MAX_CONTENT   = 16 * 1024 * 1024  # 16 MB
 TARGET_SIZE   = 600               # final 600x600
 MAX_BYTES     = 240 * 1024        # < 240 KB
 
-# --- إعدادات القص (توسيع الكادر بأمان) ---
-HEAD_TARGET   = 0.50  # الرأس يشغل 50% (الحد الأدنى المسموح)
-HEAD_TOP_POS  = 0.03  # مسافة 5% فقط فوق الرأس
+# --- إعدادات القص (تم ضبطها لإظهار الكتفين بشكل طبيعي) ---
+HEAD_TARGET   = 0.60  # الرأس يشغل 60% (مطابق للشروط وممتاز جداً)
+HEAD_TOP_POS  = 0.10  # إضافة مساحة 10% فوق الرأس لإنزال الصورة للأسفل
 MAX_AGE_SEC   = 60 * 60
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -196,8 +196,8 @@ def process_photo(pil_img, original_bytes_len, original_format):
             fx, fy, fw, fh = face
             head_top = fy - 0.5 * fh
             
-            # توسيع الكادر لإظهار الكتفين
-            head_height = 1.70 * fh 
+            # تقدير حجم الرأس والمساحة المطلوبة
+            head_height = 1.55 * fh 
             
             crop_size = max(head_height / HEAD_TARGET, 300)
             # حماية السيرفر: منع الكادر من أن يكون أكبر من حجم الصورة بكثير لتجنب انهيار الذاكرة
@@ -222,6 +222,7 @@ def process_photo(pil_img, original_bytes_len, original_format):
         actions.append("resized_600")
         actions.append("lighting_fixed")
 
+        # ضمان أن الحواف بيضاء تماماً
         crop[0:5, :] = 255
         crop[-5:, :] = 255
         crop[:, 0:5] = 255
@@ -271,6 +272,7 @@ def api_process():
     try:
         pil_img = Image.open(io.BytesIO(raw))
         pil_img.load()
+        # تصغير الصورة مبدئياً إلى 800x800 كحد أقصى لتجنب انهيار الذاكرة
         pil_img.thumbnail((800, 800), Image.LANCZOS)
     except Exception:
         return jsonify({"ok": False, "error": "bad_format"}), 400
@@ -309,8 +311,16 @@ def api_process():
 def download(filename):
     safe = os.path.basename(filename)
     path = os.path.join(RESULT_DIR, safe)
-    if not os.path.isfile(path): return jsonify({"ok": False}), 404
-    return send_from_directory(RESULT_DIR, safe, as_attachment=True, download_name="dv-lottery-photo-600x600.jpg")
+    if not os.path.isfile(path): 
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    
+    # إجبار المتصفح على تنزيل الملف كـ Attachment بالاسم والمواصفات المطلوبة
+    return send_from_directory(
+        RESULT_DIR, 
+        safe, 
+        as_attachment=True, 
+        download_name="dv-lottery-photo-600x600.jpg"
+    )
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
