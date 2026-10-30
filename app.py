@@ -452,7 +452,11 @@ def index():
     cleanup_old_files()
     return render_template("index.html", rembg=REMBG_AVAILABLE)
 
-
+##################
+@app.route("/healthz")
+def healthz():
+    return "OK", 200
+#########################
 @app.route("/api/health")
 def health():
     return jsonify({
