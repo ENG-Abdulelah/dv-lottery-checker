@@ -24,63 +24,76 @@
         }
     </style>
 </head>
-<body class="min-h-screen flex items-center justify-center p-4">
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
 
-    <!-- قسم رفع الصورة -->
-    <div id="uploadSection" class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg text-center">
-        <h1 class="text-2xl font-bold text-blue-600 mb-2">فحص وتعديل صور اللوتري الأمريكي 🇺🇸</h1>
-        <p class="text-gray-600 mb-6">قم برفع صورتك الشخصية وسيقوم النظام بفحصها وتعديلها لتكون مطابقة للشروط الرسمية 100%.</p>
-        
-        <div class="mb-6">
-            <input type="file" id="fileInput" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
-            <label for="fileInput" class="cursor-pointer bg-blue-50 text-blue-600 font-semibold py-3 px-6 rounded-lg border border-blue-200 hover:bg-blue-100 transition inline-block">
-                اختيار صورة من الجهاز
-            </label>
-            <p id="fileName" class="mt-3 text-sm text-gray-500">لم يتم اختيار أي صورة</p>
-        </div>
+    <div class="w-full max-w-lg">
+        <!-- قسم رفع الصورة -->
+        <div id="uploadSection" class="bg-white rounded-2xl shadow-xl p-8 text-center">
+            <h1 class="text-2xl font-bold text-blue-600 mb-2">فحص وتعديل صور اللوتري الأمريكي 🇺🇸</h1>
+            <p class="text-gray-600 mb-4">قم برفع صورتك الشخصية وسيقوم النظام بفحصها وتعديلها لتكون مطابقة للشروط الرسمية 100%.</p>
+            
+            <!-- ملاحظة هامة للمستخدمين -->
+            <div class="bg-yellow-50 border-r-4 border-yellow-400 p-4 mb-6 text-sm text-yellow-800 text-right rounded-l-lg">
+                <p class="font-bold mb-1">⚠️ ملاحظة هامة جداً:</p>
+                <p>للحصول على أفضل نتيجة، يرجى رفع صورة تكون مأخوذة من مسافة متوسطة (تظهر الرأس، الرقبة، وجزء من الصدر والكتفين). الصور المأخوذة عن قرب (سيلفي) قد تظهر بحواف مقطوعة بعد القص للحفاظ على النسبة المطلوبة.</p>
+            </div>
 
-        <button id="processBtn" onclick="processImage()" disabled class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg opacity-50 cursor-not-allowed transition">
-            فحص وتعديل الصورة الآن
-        </button>
-    </div>
+            <div class="mb-6">
+                <input type="file" id="fileInput" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
+                <label for="fileInput" class="cursor-pointer bg-blue-50 text-blue-600 font-semibold py-3 px-6 rounded-lg border border-blue-200 hover:bg-blue-100 transition inline-block w-full">
+                    اختيار صورة من الجهاز
+                </label>
+                <p id="fileName" class="mt-3 text-sm text-gray-500">لم يتم اختيار أي صورة</p>
+            </div>
 
-    <!-- قسم التحميل -->
-    <div id="loadingSection" class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg text-center hidden">
-        <div class="flex justify-center mb-4">
-            <div class="spinner"></div>
-        </div>
-        <h2 class="text-xl font-bold text-gray-800 mb-2">جاري فحص وتعديل الصورة...</h2>
-        <p class="text-gray-500 text-sm">يرجى الانتظار، قد يستغرق هذا بضع ثوانٍ.</p>
-        <div class="progress-bar-container">
-            <div id="progressBar" class="progress-bar"></div>
-        </div>
-    </div>
-
-    <!-- قسم النتائج -->
-    <div id="resultSection" class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg text-center hidden">
-        <h2 class="text-2xl font-bold text-green-600 mb-4">تم فحص الصورة بنجاح!</h2>
-        
-        <!-- المشاكل المكتشفة -->
-        <div id="issuesContainer" class="bg-red-50 text-red-700 p-4 rounded-lg mb-6 text-right text-sm hidden">
-            <h3 class="font-bold mb-2">المشاكل التي تم اكتشافها وتعديلها:</h3>
-            <ul id="issuesList" class="list-disc list-inside space-y-1"></ul>
-        </div>
-
-        <!-- الصورة المعدلة -->
-        <div class="mb-6">
-            <img id="resultImage" src="" alt="الصورة المعدلة" class="w-full h-auto rounded-lg border shadow-sm mx-auto max-w-xs">
-        </div>
-
-        <!-- أزرار الخيارات -->
-        <div class="flex flex-col gap-3">
-            <a id="downloadBtn" href="#" class="bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                تحميل الصورة المعدلة
-            </a>
-            <button onclick="resetApp()" class="bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 transition">
-                إلغاء وفحص صورة أخرى
+            <button id="processBtn" onclick="processImage()" disabled class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg opacity-50 cursor-not-allowed transition">
+                فحص وتعديل الصورة الآن
             </button>
         </div>
+
+        <!-- قسم التحميل -->
+        <div id="loadingSection" class="bg-white rounded-2xl shadow-xl p-8 text-center hidden">
+            <div class="flex justify-center mb-4">
+                <div class="spinner"></div>
+            </div>
+            <h2 class="text-xl font-bold text-gray-800 mb-2">جاري فحص وتعديل الصورة...</h2>
+            <p class="text-gray-500 text-sm">يرجى الانتظار، قد يستغرق هذا بضع ثوانٍ.</p>
+            <div class="progress-bar-container">
+                <div id="progressBar" class="progress-bar"></div>
+            </div>
+        </div>
+
+        <!-- قسم النتائج -->
+        <div id="resultSection" class="bg-white rounded-2xl shadow-xl p-8 text-center hidden">
+            <h2 class="text-2xl font-bold text-green-600 mb-4">تم فحص الصورة بنجاح!</h2>
+            
+            <!-- المشاكل المكتشفة -->
+            <div id="issuesContainer" class="bg-red-50 text-red-700 p-4 rounded-lg mb-6 text-right text-sm hidden">
+                <h3 class="font-bold mb-2">المشاكل التي تم اكتشافها وتعديلها:</h3>
+                <ul id="issuesList" class="list-disc list-inside space-y-1"></ul>
+            </div>
+
+            <!-- الصورة المعدلة -->
+            <div class="mb-6">
+                <img id="resultImage" src="" alt="الصورة المعدلة" class="w-full h-auto rounded-lg border shadow-sm mx-auto max-w-xs">
+            </div>
+
+            <!-- أزرار الخيارات -->
+            <div class="flex flex-col gap-3">
+                <a id="downloadBtn" href="#" download="dv-lottery-photo-600x600.jpg" class="bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    تحميل الصورة المعدلة (600x600)
+                </a>
+                <button onclick="resetApp()" class="bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 transition">
+                    إلغاء وفحص صورة أخرى
+                </button>
+            </div>
+        </div>
+        
+        <!-- اسم المطور -->
+        <footer class="mt-8 text-center text-gray-500 text-sm">
+            <p>تم التطوير بواسطة: <span class="font-bold text-gray-700">المهندس عبدالاله صادق</span></p>
+        </footer>
     </div>
 
     <script>
@@ -121,7 +134,6 @@
                     body: formData
                 });
 
-                // إذا رد السيرفر بخطأ (مثل 502 بسبب الذاكرة)
                 if (!response.ok) {
                     throw new Error("السيرفر واجه مشكلة (كود: " + response.status + "). يرجى استخدام صورة بحجم أصغر.");
                 }
@@ -151,7 +163,11 @@
             document.getElementById('resultSection').classList.remove('hidden');
 
             document.getElementById('resultImage').src = data.result_url;
-            document.getElementById('downloadBtn').href = data.download_url;
+            
+            // إجبار المتصفح على تنزيل الملف مباشرة
+            const downloadLink = document.getElementById('downloadBtn');
+            downloadLink.href = data.download_url;
+            // خاصية download موجودة في HTML مسبقاً
 
             const issuesContainer = document.getElementById('issuesContainer');
             const issuesList = document.getElementById('issuesList');
