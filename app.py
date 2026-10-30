@@ -42,7 +42,7 @@ MAX_BYTES     = 240 * 1024        # < 240 KB
 
 # --- إعدادات القص (تم تعديلها لإظهار الكتفين) ---
 HEAD_TARGET   = 0.50  # الرأس يشغل 50% (الحد الأدنى المسموح لإظهار مساحة واسعة)
-HEAD_TOP_POS  = 0.06  # مسافة 6% فقط فوق الرأس (لإظهار أكبر قدر من الصدر والكتف)
+HEAD_TOP_POS  = 0.05  # مسافة 6% فقط فوق الرأس (لإظهار أكبر قدر من الصدر والكتف)
 MAX_AGE_SEC   = 60 * 60
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -198,7 +198,7 @@ def process_photo(pil_img, original_bytes_len, original_format):
             head_top = fy - 0.5 * fh
             
             # --- تعديل هام: زيادة مساحة الرأس التقديرية لتوسيع الكادر ---
-            head_height = 1.6 * fh 
+            head_height = 1.85 * fh 
             
             crop_size = max(head_height / HEAD_TARGET, 300)
             
@@ -206,7 +206,7 @@ def process_photo(pil_img, original_bytes_len, original_format):
             left = center_x - crop_size / 2.0
             top = head_top - HEAD_TOP_POS * crop_size
             
-            crop = crop_square_with_padding(bgr2, left, top, crop_size)
+            crop = crop_square_with_padding(gr2, left, top, crop_size)
             actions.append("head_adjusted")
         else:
             issues.append("face_not_found")
