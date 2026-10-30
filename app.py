@@ -40,9 +40,9 @@ MAX_CONTENT   = 16 * 1024 * 1024  # 16 MB
 TARGET_SIZE   = 600               # final 600x600
 MAX_BYTES     = 240 * 1024        # < 240 KB
 
-# --- إعدادات القص (تم تعديلها لإظهار الكتفين) ---
-HEAD_TARGET   = 0.50  # الرأس يشغل 50% (الحد الأدنى المسموح لإظهار مساحة واسعة)
-HEAD_TOP_POS  = 0.05  # مسافة 6% فقط فوق الرأس (لإظهار أكبر قدر من الصدر والكتف)
+# --- إعدادات القص (توسيع الكادر بأمان) ---
+HEAD_TARGET   = 0.50  # الرأس يشغل 50% (الحد الأدنى المسموح)
+HEAD_TOP_POS  = 0.05  # مسافة 5% فقط فوق الرأس
 MAX_AGE_SEC   = 60 * 60
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -99,10 +99,8 @@ def analyze_background(bgr):
     }
 
 def make_background_white(img_rgb):
-    """تحويل الخلفية الفاتحة إلى بيضاء نقية دون المساس بالشعر أو الرقبة"""
     arr = np.array(img_rgb)
     h, w = arr.shape[:2]
-    
     patch = max(10, min(h, w) // 10)
     corners = np.vstack([
         arr[0:patch, 0:patch].reshape(-1, 3),
@@ -111,7 +109,6 @@ def make_background_white(img_rgb):
     bg_color = np.mean(corners, axis=0)
     
     diff = np.linalg.norm(arr.astype(np.float32) - bg_color, axis=2)
-    
     threshold = 45
     mask = diff < threshold
     
@@ -133,6 +130,8 @@ def crop_square_with_padding(img, left, top, size):
     return img[top:top + size, left:left + size]
 
 def enhance_lighting(bgr):
+    if bgr is None or bgr.size == 0:
+        return bgr
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY).astype(np.float32)
     blur = cv2.GaussianBlur(gray, (0, 0), 45)
     target = max(float(np.percentile(blur, 80)), 1.0)
@@ -197,16 +196,18 @@ def process_photo(pil_img, original_bytes_len, original_format):
             fx, fy, fw, fh = face
             head_top = fy - 0.5 * fh
             
-            # --- تعديل هام: زيادة مساحة الرأس التقديرية لتوسيع الكادر ---
+            # توسيع الكادر لإظهار الكتفين
             head_height = 1.85 * fh 
             
             crop_size = max(head_height / HEAD_TARGET, 300)
+            # حماية السيرفر: منع الكادر من أن يكون أكبر من حجم الصورة بكثير لتجنب انهيار الذاكرة
+            crop_size = min(crop_size, max(w2, h2) * 1.5) 
             
             center_x = fx + fw / 2.0
             left = center_x - crop_size / 2.0
             top = head_top - HEAD_TOP_POS * crop_size
             
-            crop = crop_square_with_padding(gr2, left, top, crop_size)
+            crop = crop_square_with_padding(bgr2, left, top, crop_size)
             actions.append("head_adjusted")
         else:
             issues.append("face_not_found")
@@ -221,7 +222,6 @@ def process_photo(pil_img, original_bytes_len, original_format):
         actions.append("resized_600")
         actions.append("lighting_fixed")
 
-        # ضمان أن الحواف بيضاء تماماً
         crop[0:5, :] = 255
         crop[-5:, :] = 255
         crop[:, 0:5] = 255
@@ -271,7 +271,6 @@ def api_process():
     try:
         pil_img = Image.open(io.BytesIO(raw))
         pil_img.load()
-        # تصغير الصورة إلى 800x800 كحد أقصى لتجنب انهيار الذاكرة في Render المجاني
         pil_img.thumbnail((800, 800), Image.LANCZOS)
     except Exception:
         return jsonify({"ok": False, "error": "bad_format"}), 400
