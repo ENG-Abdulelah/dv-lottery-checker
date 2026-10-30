@@ -162,12 +162,12 @@
             document.getElementById('loadingSection').classList.add('hidden');
             document.getElementById('resultSection').classList.remove('hidden');
 
+            // عرض الصورة باستخدام Base64
             document.getElementById('resultImage').src = data.result_url;
             
-            // إجبار المتصفح على تنزيل الملف مباشرة
+            // تجهيز رابط التحميل المباشر
             const downloadLink = document.getElementById('downloadBtn');
             downloadLink.href = data.download_url;
-            // خاصية download موجودة في HTML مسبقاً
 
             const issuesContainer = document.getElementById('issuesContainer');
             const issuesList = document.getElementById('issuesList');
