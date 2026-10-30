@@ -25,6 +25,8 @@ from PIL import Image, ImageOps
 import numpy as np
 import cv2
 
+cv2.setNumThreads(1)  # <--- أضف هذا السطر
+
 # ---------------------------------------------------------------------
 # Optional AI background remover (rembg).
 # Falls back to OpenCV GrabCut if not installed OR disabled via env.
