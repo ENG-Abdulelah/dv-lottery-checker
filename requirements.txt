@@ -1,6 +1,2 @@
-flask
-pillow
-numpy
-opencv-python-headless
-rembg
-onnxruntime
+rembg==2.0.57
+onnxruntime==1.18.0
