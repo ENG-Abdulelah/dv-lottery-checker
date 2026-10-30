@@ -5,17 +5,16 @@ import os
 import io
 import time
 import uuid
-import gc  # لتفريغ الذاكرة ومنع انهيار السيرفر
+import gc
+import base64  # <--- أضفنا هذه المكتبة لتحويل الصورة إلى Base64
 
-from flask import Flask, request, jsonify, render_template, send_from_directory
+from flask import Flask, request, jsonify, render_template
 from PIL import Image, ImageOps
 import numpy as np
 import cv2
 
-# تعطيل الخيوط المتعددة في OpenCV لتقليل استهلاك الذاكرة (مهم جداً لـ Render المجاني)
 cv2.setNumThreads(1)
 
-# تعطيل rembg إذا تم ضبط متغير البيئة
 try:
     if os.environ.get("DISABLE_REMBG", "0") == "1":
         raise ImportError("rembg disabled via DISABLE_REMBG env var")
@@ -24,51 +23,25 @@ try:
 except Exception:
     REMBG_AVAILABLE = False
 
-# ---------------------------------------------------------------------
-# Configuration & Settings
-# ---------------------------------------------------------------------
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
-UPLOAD_DIR = os.path.join(STATIC_DIR, "uploads")
-RESULT_DIR = os.path.join(STATIC_DIR, "results")
-
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(RESULT_DIR, exist_ok=True)
+os.makedirs(STATIC_DIR, exist_ok=True)
 
 ALLOWED_EXT   = {"jpg", "jpeg", "png", "webp", "bmp", "tif", "tiff"}
-MAX_CONTENT   = 16 * 1024 * 1024  # 16 MB
-TARGET_SIZE   = 600               # final 600x600
-MAX_BYTES     = 240 * 1024        # < 240 KB
-
-# --- إعدادات القص (تم ضبطها لإظهار الكتفين بشكل طبيعي) ---
-HEAD_TARGET   = 0.60  # الرأس يشغل 60% (مطابق للشروط وممتاز جداً)
-HEAD_TOP_POS  = 0.10  # إضافة مساحة 10% فوق الرأس لإنزال الصورة للأسفل
-MAX_AGE_SEC   = 60 * 60
+MAX_CONTENT   = 16 * 1024 * 1024
+TARGET_SIZE   = 600
+MAX_BYTES     = 240 * 1024
+HEAD_TARGET   = 0.60
+HEAD_TOP_POS  = 0.10
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT
 app.json.ensure_ascii = False
 
-# Haar cascades لكشف الوجه
 FACE_CASCADE = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 
-# =====================================================================
-#  UTILITIES
-# =====================================================================
-def cleanup_old_files():
-    now = time.time()
-    for folder in (UPLOAD_DIR, RESULT_DIR):
-        try:
-            for name in os.listdir(folder):
-                path = os.path.join(folder, name)
-                if os.path.isfile(path) and now - os.path.getmtime(path) > MAX_AGE_SEC:
-                    os.remove(path)
-        except Exception:
-            pass
-
 def detect_face(bgr):
-    if bgr is None or bgr.size == 0:
-        return None
+    if bgr is None or bgr.size == 0: return None
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
     gray = cv2.equalizeHist(gray)
     h, w = gray.shape[:2]
@@ -80,8 +53,7 @@ def detect_face(bgr):
         if len(f):
             faces = list(f)
             break
-    if not len(faces):
-        return None
+    if not len(faces): return None
     faces.sort(key=lambda r: r[2] * r[3], reverse=True)
     return int(faces[0][0]), int(faces[0][1]), int(faces[0][2]), int(faces[0][3])
 
@@ -92,7 +64,6 @@ def analyze_background(bgr):
     means = [float(c.reshape(-1, 3).astype(np.float32).mean()) for c in corners]
     stds = [float(c.reshape(-1, 3).astype(np.float32).std()) for c in corners]
     border_std = float(np.concatenate([c.reshape(-1, 3) for c in corners]).astype(np.float32).std())
-    
     return {
         "is_white": (np.mean(means) >= 220 and max(stds) <= 25),
         "has_shadows": (border_std > 20 or max(stds) > 20),
@@ -102,19 +73,12 @@ def make_background_white(img_rgb):
     arr = np.array(img_rgb)
     h, w = arr.shape[:2]
     patch = max(10, min(h, w) // 10)
-    corners = np.vstack([
-        arr[0:patch, 0:patch].reshape(-1, 3),
-        arr[0:patch, w-patch:w].reshape(-1, 3)
-    ])
+    corners = np.vstack([arr[0:patch, 0:patch].reshape(-1, 3), arr[0:patch, w-patch:w].reshape(-1, 3)])
     bg_color = np.mean(corners, axis=0)
-    
     diff = np.linalg.norm(arr.astype(np.float32) - bg_color, axis=2)
-    threshold = 45
-    mask = diff < threshold
-    
+    mask = diff < 45
     mask = cv2.GaussianBlur(mask.astype(np.uint8) * 255, (9, 9), 0)
     alpha = mask.astype(np.float32) / 255.0
-    
     white_bg = np.ones_like(arr, dtype=np.float32) * 255.0
     out = arr.astype(np.float32) * (1 - alpha[..., None]) + white_bg * alpha[..., None]
     return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8))
@@ -130,15 +94,13 @@ def crop_square_with_padding(img, left, top, size):
     return img[top:top + size, left:left + size]
 
 def enhance_lighting(bgr):
-    if bgr is None or bgr.size == 0:
-        return bgr
+    if bgr is None or bgr.size == 0: return bgr
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY).astype(np.float32)
     blur = cv2.GaussianBlur(gray, (0, 0), 45)
     target = max(float(np.percentile(blur, 80)), 1.0)
     gain = np.clip(target / np.maximum(blur, 1.0), 0.8, 1.5)
     gain = 1.0 + (gain - 1.0) * 0.6
     out = np.clip(bgr.astype(np.float32) * gain[..., None], 0, 255).astype(np.uint8)
-    
     lab = cv2.cvtColor(out, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
     l = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(l)
@@ -152,17 +114,12 @@ def encode_jpeg_under_limit(pil_img, limit=MAX_BYTES):
         if len(data) <= limit: return data, q
     return data, 20
 
-# =====================================================================
-#  MAIN PIPELINE
-# =====================================================================
 def process_photo(pil_img, original_bytes_len, original_format):
     try:
         issues, actions, metrics = [], [], {}
         img = ImageOps.exif_transpose(pil_img).convert("RGB")
         ow, oh = img.size
-        metrics["original_width"], metrics["original_height"] = ow, oh
-        metrics["original_kb"] = round(original_bytes_len / 1024.0, 1)
-
+        
         fmt = (original_format or "").lower().replace("jpg", "jpeg")
         if fmt != "jpeg": issues.append("not_jpeg")
         if original_bytes_len > MAX_BYTES: issues.append("file_too_large")
@@ -174,7 +131,6 @@ def process_photo(pil_img, original_bytes_len, original_format):
         if not bg["is_white"]:
             issues.append("bg_not_white")
             if bg["has_shadows"]: issues.append("bg_shadows")
-            
             if REMBG_AVAILABLE:
                 try:
                     img = rembg_remove(img).convert("RGB")
@@ -190,23 +146,16 @@ def process_photo(pil_img, original_bytes_len, original_format):
         bgr2 = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
         h2, w2 = bgr2.shape[:2]
         face = detect_face(bgr2)
-        metrics["face_detected"] = bool(face)
 
         if face:
             fx, fy, fw, fh = face
             head_top = fy - 0.5 * fh
-            
-            # تقدير حجم الرأس والمساحة المطلوبة
             head_height = 1.55 * fh 
-            
             crop_size = max(head_height / HEAD_TARGET, 300)
-            # حماية السيرفر: منع الكادر من أن يكون أكبر من حجم الصورة بكثير لتجنب انهيار الذاكرة
             crop_size = min(crop_size, max(w2, h2) * 1.5) 
-            
             center_x = fx + fw / 2.0
             left = center_x - crop_size / 2.0
             top = head_top - HEAD_TOP_POS * crop_size
-            
             crop = crop_square_with_padding(bgr2, left, top, crop_size)
             actions.append("head_adjusted")
         else:
@@ -219,10 +168,7 @@ def process_photo(pil_img, original_bytes_len, original_format):
 
         crop = cv2.resize(crop, (TARGET_SIZE, TARGET_SIZE), interpolation=cv2.INTER_LANCZOS4)
         crop = enhance_lighting(crop)
-        actions.append("resized_600")
-        actions.append("lighting_fixed")
-
-        # ضمان أن الحواف بيضاء تماماً
+        
         crop[0:5, :] = 255
         crop[-5:, :] = 255
         crop[:, 0:5] = 255
@@ -234,23 +180,16 @@ def process_photo(pil_img, original_bytes_len, original_format):
         actions.append("converted_jpg")
         if original_bytes_len > MAX_BYTES: actions.append("compressed")
 
-        metrics["final_kb"] = round(len(jpeg_bytes) / 1024.0, 1)
-        
         return jpeg_bytes, {
             "issues": list(dict.fromkeys(issues)), 
             "actions": list(dict.fromkeys(actions)), 
-            "metrics": metrics, 
             "compliant": len(issues) == 0
         }
     finally:
         gc.collect()
 
-# =====================================================================
-#  ROUTES
-# =====================================================================
 @app.route("/")
 def index():
-    cleanup_old_files()
     return render_template("index.html", rembg=REMBG_AVAILABLE)
 
 @app.route("/healthz")
@@ -258,7 +197,6 @@ def healthz(): return "OK", 200
 
 @app.route("/api/process", methods=["POST"])
 def api_process():
-    cleanup_old_files()
     if "photo" not in request.files: return jsonify({"ok": False, "error": "no_file"}), 400
     f = request.files["photo"]
     if not f or f.filename == "": return jsonify({"ok": False, "error": "no_file"}), 400
@@ -272,55 +210,28 @@ def api_process():
     try:
         pil_img = Image.open(io.BytesIO(raw))
         pil_img.load()
-        # تصغير الصورة مبدئياً إلى 800x800 كحد أقصى لتجنب انهيار الذاكرة
         pil_img.thumbnail((800, 800), Image.LANCZOS)
     except Exception:
         return jsonify({"ok": False, "error": "bad_format"}), 400
 
-    uid = uuid.uuid4().hex
-    try:
-        preview = ImageOps.exif_transpose(pil_img).convert("RGB")
-        preview.thumbnail((800, 800), Image.LANCZOS)
-        orig_name = f"{uid}_orig.jpg"
-        preview.save(os.path.join(UPLOAD_DIR, orig_name), format="JPEG", quality=90)
-    except Exception:
-        orig_name = None
-
     try:
         result_bytes, report = process_photo(pil_img, len(raw), pil_img.format)
     except Exception as e:
-        app.logger.exception("processing failed")
         return jsonify({"ok": False, "error": "server", "detail": str(e)}), 500
     finally:
         del pil_img, raw
         gc.collect()
 
-    res_name = f"{uid}_dv600.jpg"
-    with open(os.path.join(RESULT_DIR, res_name), "wb") as fh:
-        fh.write(result_bytes)
+    # تحويل الصورة إلى Base64 لعرضها وتنزيلها مباشرة بدون حفظها في السيرفر
+    b64_str = base64.b64encode(result_bytes).decode('utf-8')
+    data_uri = f"data:image/jpeg;base64,{b64_str}"
 
     return jsonify({
         "ok": True,
-        "original_url": f"/static/uploads/{orig_name}" if orig_name else None,
-        "result_url": f"/static/results/{res_name}",
-        "download_url": f"/download/{res_name}",
+        "result_url": data_uri,
+        "download_url": data_uri,
         "report": report,
     })
-
-@app.route("/download/<path:filename>")
-def download(filename):
-    safe = os.path.basename(filename)
-    path = os.path.join(RESULT_DIR, safe)
-    if not os.path.isfile(path): 
-        return jsonify({"ok": False, "error": "not_found"}), 404
-    
-    # إجبار المتصفح على تنزيل الملف كـ Attachment بالاسم والمواصفات المطلوبة
-    return send_from_directory(
-        RESULT_DIR, 
-        safe, 
-        as_attachment=True, 
-        download_name="dv-lottery-photo-600x600.jpg"
-    )
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
