@@ -42,7 +42,7 @@ MAX_BYTES     = 240 * 1024
 
 # إعدادات القص (تم تعديلها لإظهار الكتفين)
 HEAD_TARGET   = 0.50  # الرأس يشغل 52% من الصورة
-HEAD_TOP_POS  = 0.09  # المسافة فوق الرأس 8%
+HEAD_TOP_POS  = 0.10  # المسافة فوق الرأس 8%
 MAX_AGE_SEC   = 60 * 60
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
