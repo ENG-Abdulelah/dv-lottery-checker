@@ -1,11 +1,15 @@
-# -*- coding: utf-8 -*-
+# =====================================================================
+# app.py — DV Lottery Photo Checker & Auto-Fixer (Flask backend)
+# =====================================================================
 """
-=====================================================================
- Ultra-Precise DV Lottery Photo Checker & Auto-Fixer  —  Flask Backend
-=====================================================================
- Requirements:
-   pip install flask pillow numpy opencv-python-headless rembg onnxruntime
-=====================================================================
+Install:
+    pip install -r requirements.txt
+
+Run locally:
+    python app.py         -> http://127.0.0.1:5000
+
+Production:
+    gunicorn app:app
 """
 
 import os
@@ -18,10 +22,10 @@ from PIL import Image, ImageOps
 import numpy as np
 import cv2
 
-# --------------------------------------------------------------------
-# Optional AI background remover (rembg). If it is not installed the app
-# falls back to OpenCV GrabCut — still works, just less "magical".
-# --------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Optional AI background remover (rembg).
+# Falls back to OpenCV GrabCut if not installed.
+# ---------------------------------------------------------------------
 try:
     from rembg import remove as rembg_remove
     REMBG_AVAILABLE = True
@@ -29,9 +33,9 @@ except Exception:
     REMBG_AVAILABLE = False
 
 
-# --------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # Configuration
-# --------------------------------------------------------------------
+# ---------------------------------------------------------------------
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 UPLOAD_DIR = os.path.join(STATIC_DIR, "uploads")
@@ -46,27 +50,27 @@ TARGET_SIZE   = 600                     # final width = height = 600
 MAX_BYTES     = 240 * 1024              # < 240 KB
 HEAD_MIN      = 0.50                    # head 50% ..
 HEAD_MAX      = 0.69                    # .. 69% of image height
-HEAD_TARGET   = 0.60                    # we aim safely in the middle
+HEAD_TARGET   = 0.60                    # aim safely in the middle
 HEAD_TOP_POS  = 0.15                    # head-top position (15% from top)
 MAX_AGE_SEC   = 60 * 60                 # auto-delete generated files after 1h
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT
-app.config["JSON_AS_ASCII"] = False
+app.json.ensure_ascii = False
 
 
-# --------------------------------------------------------------------
-# OpenCV Haar cascades (bundled with opencv-python)
-# --------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Haar cascades (bundled with opencv-python)
+# ---------------------------------------------------------------------
 FACE_CASCADE    = cv2.CascadeClassifier(
     cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 PROFILE_CASCADE = cv2.CascadeClassifier(
     cv2.data.haarcascades + "haarcascade_profileface.xml")
 
 
-# ====================================================================
+# =====================================================================
 #  UTILITIES
-# ====================================================================
+# =====================================================================
 def cleanup_old_files():
     """Delete generated files older than MAX_AGE_SEC."""
     now = time.time()
@@ -149,17 +153,17 @@ def analyze_background(bgr):
         bgr[:, w - patch:w].reshape(-1, 3),
     ]).astype(np.float32)
 
-    avg_corner = float(np.mean(means))
-    worst_std  = float(max(stds))
-    border_mean = float(border.mean())
-    border_std  = float(border.std())
+    avg_corner   = float(np.mean(means))
+    worst_std    = float(max(stds))
+    border_mean  = float(border.mean())
+    border_std   = float(border.std())
 
     return {
-        "corner_brightness":  round(avg_corner, 1),
-        "corner_uniformity":  round(worst_std, 1),
-        "border_brightness":  round(border_mean, 1),
-        "border_uniformity":  round(border_std, 1),
-        "is_white":  (avg_corner >= 235 and worst_std <= 20),
+        "corner_brightness": round(avg_corner, 1),
+        "corner_uniformity": round(worst_std, 1),
+        "border_brightness": round(border_mean, 1),
+        "border_uniformity": round(border_std, 1),
+        "is_white":   (avg_corner >= 235 and worst_std <= 20),
         "has_shadows": (border_std > 20 or worst_std > 20),
     }
 
@@ -172,8 +176,7 @@ def grabcut_alpha(img_rgb):
 
     mask = np.zeros((h, w), np.uint8)
     bgd, fgd = np.zeros((1, 65), np.float64), np.zeros((1, 65), np.float64)
-    rect = (int(w * 0.06), int(h * 0.04),
-            int(w * 0.88), int(h * 0.92))
+    rect = (int(w * 0.06), int(h * 0.04), int(w * 0.88), int(h * 0.92))
     try:
         cv2.grabCut(bgr, mask, rect, bgd, fgd, 5, cv2.GC_INIT_WITH_RECT)
     except Exception:
@@ -182,7 +185,6 @@ def grabcut_alpha(img_rgb):
     alpha = np.where((mask == 2) | (mask == 0), 0, 255).astype(np.uint8)
     alpha = cv2.medianBlur(alpha, 5)
 
-    # keep only the largest connected component (the person)
     cnts, _ = cv2.findContours(alpha, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if cnts:
         big = max(cnts, key=cv2.contourArea)
@@ -198,7 +200,7 @@ def remove_background_alpha(img_rgb):
     """Return an alpha mask (uint8, 255 = foreground)."""
     if REMBG_AVAILABLE:
         try:
-            out = rembg_remove(img_rgb)          # PIL RGBA
+            out = rembg_remove(img_rgb)
             if out.mode != "RGBA":
                 out = out.convert("RGBA")
             return np.array(out.split()[-1])
@@ -228,22 +230,19 @@ def crop_square_with_padding(img, left, top, size):
 
 def enhance_lighting(bgr):
     """Flatten harsh shadows + balance contrast."""
-    # 1) illumination flattening (removes big soft shadows)
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY).astype(np.float32)
     blur = cv2.GaussianBlur(gray, (0, 0), 45)
     target = max(float(np.percentile(blur, 80)), 1.0)
     gain = target / np.maximum(blur, 1.0)
     gain = np.clip(gain, 0.75, 1.60)
-    gain = 1.0 + (gain - 1.0) * 0.60          # 60 % strength
+    gain = 1.0 + (gain - 1.0) * 0.60
     out = np.clip(bgr.astype(np.float32) * gain[..., None], 0, 255).astype(np.uint8)
 
-    # 2) CLAHE on the L channel
     lab = cv2.cvtColor(out, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
     l = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(l)
     out = cv2.cvtColor(cv2.merge([l, a, b]), cv2.COLOR_LAB2BGR)
 
-    # 3) gentle gamma correction
     mean_l = float(cv2.cvtColor(out, cv2.COLOR_BGR2GRAY).mean())
     gamma = 1.0
     if mean_l < 110:
@@ -272,9 +271,9 @@ def encode_jpeg_under_limit(pil_img, limit=MAX_BYTES):
     return last, last_q
 
 
-# ====================================================================
+# =====================================================================
 #  MAIN PIPELINE
-# ====================================================================
+# =====================================================================
 def process_photo(pil_img, original_bytes_len, original_format):
     issues, actions, metrics = [], [], {}
 
@@ -324,13 +323,12 @@ def process_photo(pil_img, original_bytes_len, original_format):
         issues.append("low_contrast");    lighting_issue = True
 
     # ----- 4. background replacement -------------------------------
-    alpha_small = None      # foreground alpha at working resolution
+    alpha_small = None
     if need_bg_fix:
-        alpha = remove_background_alpha(img)                 # 0..255
+        alpha = remove_background_alpha(img)
         alpha_small = alpha
         white = Image.new("RGB", img.size, (255, 255, 255))
-        fg = img.copy()
-        white.paste(fg, mask=Image.fromarray(alpha))
+        white.paste(img, mask=Image.fromarray(alpha))
         img = white
         actions.append("bg_replaced")
 
@@ -343,32 +341,23 @@ def process_photo(pil_img, original_bytes_len, original_format):
 
     if face:
         fx, fy, fw, fh = face
-
-        # Heuristic: Haar box ≈ eyebrows→chin.
-        # Full head (hair top → chin) ≈ 1.5 × face-box height.
         head_top    = fy - 0.5 * fh
         head_height = 1.5 * fh
-
-        ratio_orig = head_height / float(h2)
+        ratio_orig  = head_height / float(h2)
         metrics["head_ratio_original"] = round(ratio_orig * 100, 1)
 
         if ratio_orig < HEAD_MIN or ratio_orig > HEAD_MAX:
             issues.append("head_proportion")
 
-        crop_size = head_height / HEAD_TARGET
-        crop_size = max(crop_size, 260)
-
-        center_x = fx + fw / 2.0
+        crop_size = max(head_height / HEAD_TARGET, 260)
+        center_x  = fx + fw / 2.0
         left = center_x - crop_size / 2.0
         top  = head_top - HEAD_TOP_POS * crop_size
 
         crop = crop_square_with_padding(bgr2, left, top, crop_size)
 
-        # face rectangle expressed in the final 600×600 coordinate space
         s = TARGET_SIZE / float(crop_size)
-        face_out = (
-            (fx - left) * s, (fy - top) * s, fw * s, fh * s
-        )
+        face_out = ((fx - left) * s, (fy - top) * s, fw * s, fh * s)
         actions.append("head_adjusted")
     else:
         issues.append("face_not_found")
@@ -384,35 +373,32 @@ def process_photo(pil_img, original_bytes_len, original_format):
     actions.append("resized_600")
 
     # ----- 7. lighting & contrast enhancement ----------------------
-    if lighting_issue or True:      # always apply a gentle pass
-        enhanced = enhance_lighting(crop)
+    enhanced = enhance_lighting(crop)
 
-        # feather mask around the face so the white background stays pure
-        mask = np.zeros((TARGET_SIZE, TARGET_SIZE), np.uint8)
-        if face_out:
-            bx, by, bw, bh = face_out
-            x0 = int(max(0, bx - 0.75 * bw))
-            y0 = int(max(0, by - 0.95 * bh))
-            x1 = int(min(TARGET_SIZE, bx + bw + 0.75 * bw))
-            y1 = int(min(TARGET_SIZE, by + bh + 0.60 * bh))
-        else:
-            x0, y0 = 60, 40
-            x1, y1 = TARGET_SIZE - 60, TARGET_SIZE - 60
-        cv2.rectangle(mask, (x0, y0), (x1, y1), 255, -1)
-        mask = cv2.GaussianBlur(mask, (0, 0), 55).astype(np.float32) / 255.0
-        mask3 = mask[..., None]
+    mask = np.zeros((TARGET_SIZE, TARGET_SIZE), np.uint8)
+    if face_out:
+        bx, by, bw, bh = face_out
+        x0 = int(max(0, bx - 0.75 * bw))
+        y0 = int(max(0, by - 0.95 * bh))
+        x1 = int(min(TARGET_SIZE, bx + bw + 0.75 * bw))
+        y1 = int(min(TARGET_SIZE, by + bh + 0.60 * bh))
+    else:
+        x0, y0 = 60, 40
+        x1, y1 = TARGET_SIZE - 60, TARGET_SIZE - 60
+    cv2.rectangle(mask, (x0, y0), (x1, y1), 255, -1)
+    mask = cv2.GaussianBlur(mask, (0, 0), 55).astype(np.float32) / 255.0
+    mask3 = mask[..., None]
 
-        crop = np.clip(enhanced.astype(np.float32) * mask3 +
-                       crop.astype(np.float32) * (1.0 - mask3),
-                       0, 255).astype(np.uint8)
-        if lighting_issue:
-            actions.append("lighting_fixed")
+    crop = np.clip(enhanced.astype(np.float32) * mask3 +
+                   crop.astype(np.float32) * (1.0 - mask3),
+                   0, 255).astype(np.uint8)
+    if lighting_issue:
+        actions.append("lighting_fixed")
 
     # ----- 8. re-composite on pure white (guaranteed) --------------
     if alpha_small is not None:
         a = cv2.resize(alpha_small, (TARGET_SIZE, TARGET_SIZE),
                        interpolation=cv2.INTER_LINEAR).astype(np.float32) / 255.0
-        # slight erosion of the alpha to remove fringe pixels
         a = cv2.erode(a, np.ones((3, 3), np.float32), iterations=1)
         a = cv2.GaussianBlur(a, (0, 0), 1.2)
         a3 = a[..., None]
@@ -427,15 +413,14 @@ def process_photo(pil_img, original_bytes_len, original_format):
         actions.append("compressed")
     actions.append("converted_jpg")
 
-    metrics["final_width"]  = TARGET_SIZE
-    metrics["final_height"] = TARGET_SIZE
-    metrics["final_kb"]     = round(len(jpeg_bytes) / 1024.0, 1)
-    metrics["jpeg_quality"] = quality
+    metrics["final_width"]      = TARGET_SIZE
+    metrics["final_height"]     = TARGET_SIZE
+    metrics["final_kb"]         = round(len(jpeg_bytes) / 1024.0, 1)
+    metrics["jpeg_quality"]     = quality
     metrics["head_ratio_final"] = round(HEAD_TARGET * 100, 1)
-    metrics["head_min_pct"] = int(HEAD_MIN * 100)
-    metrics["head_max_pct"] = int(HEAD_MAX * 100)
+    metrics["head_min_pct"]     = int(HEAD_MIN * 100)
+    metrics["head_max_pct"]     = int(HEAD_MAX * 100)
 
-    # de-duplicate while keeping order
     def uniq(seq):
         seen, out = set(), []
         for x in seq:
@@ -443,20 +428,17 @@ def process_photo(pil_img, original_bytes_len, original_format):
                 seen.add(x); out.append(x)
         return out
 
-    issues  = uniq(issues)
-    actions = uniq(actions)
-
     return jpeg_bytes, {
-        "issues":  issues,
-        "actions": actions,
-        "metrics": metrics,
+        "issues":   uniq(issues),
+        "actions":  uniq(actions),
+        "metrics":  metrics,
         "compliant": len(issues) == 0,
     }
 
 
-# ====================================================================
+# =====================================================================
 #  ROUTES
-# ====================================================================
+# =====================================================================
 @app.route("/")
 def index():
     cleanup_old_files()
@@ -501,7 +483,6 @@ def api_process():
 
     uid = uuid.uuid4().hex
 
-    # store original (converted preview)
     try:
         preview = ImageOps.exif_transpose(pil_img).convert("RGB")
         preview.thumbnail((900, 900), Image.LANCZOS)
@@ -526,7 +507,7 @@ def api_process():
         "original_url": f"/static/uploads/{orig_name}" if orig_name else None,
         "result_url":   f"/static/results/{res_name}",
         "download_url": f"/download/{res_name}",
-        "report": report,
+        "report":       report,
     })
 
 
@@ -547,7 +528,8 @@ def too_large(_e):
 
 if __name__ == "__main__":
     print("=" * 62)
-    print("  DV Lottery Photo Checker — running on http://127.0.0.1:5000")
-    print(f"  rembg (AI background removal): {'AVAILABLE' if REMBG_AVAILABLE else 'FALLBACK (GrabCut)'}")
+    print("  DV Lottery Photo Checker — http://127.0.0.1:5000")
+    print(f"  rembg (AI background removal): "
+          f"{'AVAILABLE' if REMBG_AVAILABLE else 'FALLBACK (GrabCut)'}")
     print("=" * 62)
     app.run(host="0.0.0.0", port=5000, debug=True)
