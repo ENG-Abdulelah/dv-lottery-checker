@@ -5,9 +5,10 @@ import os
 import io
 import time
 import uuid
+import gc  # لتفريغ الذاكرة
 
 from flask import Flask, request, jsonify, render_template, send_from_directory
-from PIL import Image, ImageOps, ImageEnhance
+from PIL import Image, ImageOps
 import numpy as np
 import cv2
 
@@ -38,10 +39,10 @@ ALLOWED_EXT   = {"jpg", "jpeg", "png", "webp", "bmp", "tif", "tiff"}
 MAX_CONTENT   = 16 * 1024 * 1024
 TARGET_SIZE   = 600
 MAX_BYTES     = 240 * 1024
-HEAD_MIN      = 0.50
-HEAD_MAX      = 0.69
-HEAD_TARGET   = 0.52  # جعل الرأس 58% لإظهار الرقبة والكتفين
-HEAD_TOP_POS  = 0.08  # تقليل المساحة العلوية
+
+# إعدادات القص (تم تعديلها لإظهار الكتفين)
+HEAD_TARGET   = 0.52  # الرأس يشغل 52% من الصورة
+HEAD_TOP_POS  = 0.08  # المسافة فوق الرأس 8%
 MAX_AGE_SEC   = 60 * 60
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -98,11 +99,10 @@ def analyze_background(bgr):
     }
 
 def make_background_white(img_rgb):
-    """تحويل الخلفية الفاتحة إلى بيضاء نقية دون المساس بالشعر أو الرقبة"""
+    """تحويل الخلفية الفاتحة إلى بيضاء نقية دون المساس بالشعر أو الرقبة (خفيف جداً على الذاكرة)"""
     arr = np.array(img_rgb)
     h, w = arr.shape[:2]
     
-    # أخذ عينة من الحواف لمعرفة لون الخلفية
     patch = max(10, min(h, w) // 10)
     corners = np.vstack([
         arr[0:patch, 0:patch].reshape(-1, 3),
@@ -110,14 +110,11 @@ def make_background_white(img_rgb):
     ])
     bg_color = np.mean(corners, axis=0)
     
-    # حساب المسافة بين كل بكسل ولون الخلفية
     diff = np.linalg.norm(arr.astype(np.float32) - bg_color, axis=2)
     
-    # إذا كانت المسافة صغيرة (يعني بكسل خلفية)، نجعله أبيض ناصع
     threshold = 45
     mask = diff < threshold
     
-    # تنعيم القناع لتجنب حواف حادة
     mask = cv2.GaussianBlur(mask.astype(np.uint8) * 255, (9, 9), 0)
     alpha = mask.astype(np.float32) / 255.0
     
@@ -160,87 +157,92 @@ def encode_jpeg_under_limit(pil_img, limit=MAX_BYTES):
 #  MAIN PIPELINE
 # =====================================================================
 def process_photo(pil_img, original_bytes_len, original_format):
-    issues, actions, metrics = [], [], {}
-    img = ImageOps.exif_transpose(pil_img).convert("RGB")
-    ow, oh = img.size
-    metrics["original_width"], metrics["original_height"] = ow, oh
-    metrics["original_kb"] = round(original_bytes_len / 1024.0, 1)
+    try:
+        issues, actions, metrics = [], [], {}
+        img = ImageOps.exif_transpose(pil_img).convert("RGB")
+        ow, oh = img.size
+        metrics["original_width"], metrics["original_height"] = ow, oh
+        metrics["original_kb"] = round(original_bytes_len / 1024.0, 1)
 
-    fmt = (original_format or "").lower().replace("jpg", "jpeg")
-    if fmt != "jpeg": issues.append("not_jpeg")
-    if original_bytes_len > MAX_BYTES: issues.append("file_too_large")
-    if ow != oh: issues.append("not_square")
+        fmt = (original_format or "").lower().replace("jpg", "jpeg")
+        if fmt != "jpeg": issues.append("not_jpeg")
+        if original_bytes_len > MAX_BYTES: issues.append("file_too_large")
+        if ow != oh: issues.append("not_square")
 
-    bgr = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-    bg = analyze_background(bgr)
-    
-    # إذا كانت الخلفية فاتحة، نستخدم الفلتر الذكي، وإلا نستخدم GrabCut
-    if not bg["is_white"]:
-        issues.append("bg_not_white")
-        if bg["has_shadows"]: issues.append("bg_shadows")
+        bgr = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+        bg = analyze_background(bgr)
         
-        if REMBG_AVAILABLE:
-            try:
-                img = rembg_remove(img).convert("RGB")
-                white = Image.new("RGB", img.size, (255, 255, 255))
-                white.paste(img, mask=img.split()[-1])
-                img = white
-            except:
+        if not bg["is_white"]:
+            issues.append("bg_not_white")
+            if bg["has_shadows"]: issues.append("bg_shadows")
+            
+            if REMBG_AVAILABLE:
+                try:
+                    img = rembg_remove(img).convert("RGB")
+                    white = Image.new("RGB", img.size, (255, 255, 255))
+                    white.paste(img, mask=img.split()[-1])
+                    img = white
+                except:
+                    img = make_background_white(img)
+            else:
                 img = make_background_white(img)
+            actions.append("bg_replaced")
+
+        bgr2 = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+        h2, w2 = bgr2.shape[:2]
+        face = detect_face(bgr2)
+        metrics["face_detected"] = bool(face)
+
+        if face:
+            fx, fy, fw, fh = face
+            head_top = fy - 0.4 * fh
+            head_height = 1.5 * fh
+            
+            crop_size = max(head_height / HEAD_TARGET, 300)
+            
+            center_x = fx + fw / 2.0
+            left = center_x - crop_size / 2.0
+            top = head_top - HEAD_TOP_POS * crop_size
+            
+            crop = crop_square_with_padding(bgr2, left, top, crop_size)
+            actions.append("head_adjusted")
         else:
-            img = make_background_white(img)
-        actions.append("bg_replaced")
+            issues.append("face_not_found")
+            side = min(h2, w2)
+            crop = crop_square_with_padding(bgr2, (w2 - side) / 2.0, (h2 - side) / 2.0, side)
 
-    bgr2 = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-    h2, w2 = bgr2.shape[:2]
-    face = detect_face(bgr2)
-    metrics["face_detected"] = bool(face)
+        # مسح الذاكرة المؤقتة قبل عملية التكبير لتجنب الانهيار
+        del bgr, bgr2, img
+        gc.collect()
 
-    if face:
-        fx, fy, fw, fh = face
-        # حساب نسبة الرأس التقريبية (الشعر حتى الذقن)
-        head_top = fy - 0.4 * fh
-        head_height = 1.5 * fh
+        crop = cv2.resize(crop, (TARGET_SIZE, TARGET_SIZE), interpolation=cv2.INTER_LANCZOS4)
+        crop = enhance_lighting(crop)
+        actions.append("resized_600")
+        actions.append("lighting_fixed")
+
+        # ضمان بياض الحواف
+        crop[0:5, :] = 255
+        crop[-5:, :] = 255
+        crop[:, 0:5] = 255
+        crop[:, -5:] = 255
+
+        final_img = Image.fromarray(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
+        jpeg_bytes, quality = encode_jpeg_under_limit(final_img, MAX_BYTES)
         
-        # تحديد حجم المربع المطلوب ليكون الرأس فيه 58%
-        crop_size = max(head_height / HEAD_TARGET, 300)
+        actions.append("converted_jpg")
+        if original_bytes_len > MAX_BYTES: actions.append("compressed")
+
+        metrics["final_kb"] = round(len(jpeg_bytes) / 1024.0, 1)
         
-        center_x = fx + fw / 2.0
-        left = center_x - crop_size / 2.0
-        top = head_top - HEAD_TOP_POS * crop_size
-        
-        crop = crop_square_with_padding(bgr2, left, top, crop_size)
-        actions.append("head_adjusted")
-    else:
-        issues.append("face_not_found")
-        side = min(h2, w2)
-        crop = crop_square_with_padding(bgr2, (w2 - side) / 2.0, (h2 - side) / 2.0, side)
-
-    crop = cv2.resize(crop, (TARGET_SIZE, TARGET_SIZE), interpolation=cv2.INTER_LANCZOS4)
-    crop = enhance_lighting(crop)
-    actions.append("resized_600")
-    actions.append("lighting_fixed")
-
-    # ضمان أن الخلفية بيضاء ناصعة 100% (حواف الصورة)
-    crop[0:5, :] = 255
-    crop[-5:, :] = 255
-    crop[:, 0:5] = 255
-    crop[:, -5:] = 255
-
-    final_img = Image.fromarray(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
-    jpeg_bytes, quality = encode_jpeg_under_limit(final_img, MAX_BYTES)
-    
-    actions.append("converted_jpg")
-    if original_bytes_len > MAX_BYTES: actions.append("compressed")
-
-    metrics["final_kb"] = round(len(jpeg_bytes) / 1024.0, 1)
-    
-    return jpeg_bytes, {
-        "issues": list(dict.fromkeys(issues)), 
-        "actions": list(dict.fromkeys(actions)), 
-        "metrics": metrics, 
-        "compliant": len(issues) == 0
-    }
+        return jpeg_bytes, {
+            "issues": list(dict.fromkeys(issues)), 
+            "actions": list(dict.fromkeys(actions)), 
+            "metrics": metrics, 
+            "compliant": len(issues) == 0
+        }
+    finally:
+        # تنظيف الذاكرة دائماً حتى لو حدث خطأ
+        gc.collect()
 
 # =====================================================================
 #  ROUTES
@@ -269,15 +271,15 @@ def api_process():
     try:
         pil_img = Image.open(io.BytesIO(raw))
         pil_img.load()
-        # تصغير الصورة لتجنب انهيار الذاكرة
-        pil_img.thumbnail((1200, 1200), Image.LANCZOS)
+        # تصغير الصورة إلى 800x800 كحد أقصى لتجنب انهيار الذاكرة في Render
+        pil_img.thumbnail((800, 800), Image.LANCZOS)
     except Exception:
         return jsonify({"ok": False, "error": "bad_format"}), 400
 
     uid = uuid.uuid4().hex
     try:
         preview = ImageOps.exif_transpose(pil_img).convert("RGB")
-        preview.thumbnail((900, 900), Image.LANCZOS)
+        preview.thumbnail((800, 800), Image.LANCZOS)
         orig_name = f"{uid}_orig.jpg"
         preview.save(os.path.join(UPLOAD_DIR, orig_name), format="JPEG", quality=90)
     except Exception:
@@ -286,7 +288,11 @@ def api_process():
     try:
         result_bytes, report = process_photo(pil_img, len(raw), pil_img.format)
     except Exception as e:
+        app.logger.exception("processing failed")
         return jsonify({"ok": False, "error": "server", "detail": str(e)}), 500
+    finally:
+        del pil_img, raw
+        gc.collect()
 
     res_name = f"{uid}_dv600.jpg"
     with open(os.path.join(RESULT_DIR, res_name), "wb") as fh:
