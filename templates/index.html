@@ -10,7 +10,7 @@
         body { font-family: 'Tajawal', sans-serif; background-color: #f3f4f6; }
         .spinner {
             border: 4px solid rgba(0, 0, 0, 0.1);
-            width: 36px; height: 36px;
+            width: 40px; height: 40px;
             border-radius: 50%;
             border-left-color: #2563eb;
             animation: spin 1s linear infinite;
@@ -26,7 +26,7 @@
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 
-    <!-- القسم الرئيسي (رفع الصورة) -->
+    <!-- قسم رفع الصورة -->
     <div id="uploadSection" class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg text-center">
         <h1 class="text-2xl font-bold text-blue-600 mb-2">فحص وتعديل صور اللوتري الأمريكي 🇺🇸</h1>
         <p class="text-gray-600 mb-6">قم برفع صورتك الشخصية وسيقوم النظام بفحصها وتعديلها لتكون مطابقة للشروط الرسمية 100%.</p>
@@ -44,7 +44,7 @@
         </button>
     </div>
 
-    <!-- قسم التحميل (يظهر أثناء المعالجة) -->
+    <!-- قسم التحميل -->
     <div id="loadingSection" class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg text-center hidden">
         <div class="flex justify-center mb-4">
             <div class="spinner"></div>
@@ -56,7 +56,7 @@
         </div>
     </div>
 
-    <!-- قسم النتائج (يظهر بعد الانتهاء) -->
+    <!-- قسم النتائج -->
     <div id="resultSection" class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg text-center hidden">
         <h2 class="text-2xl font-bold text-green-600 mb-4">تم فحص الصورة بنجاح!</h2>
         
@@ -86,7 +86,6 @@
     <script>
         let selectedFile = null;
 
-        // دالة اختيار الملف
         function handleFileSelect(event) {
             const file = event.target.files[0];
             if (file) {
@@ -98,16 +97,12 @@
             }
         }
 
-        // دالة إرسال الصورة للسيرفر
         async function processImage() {
             if (!selectedFile) return;
 
-            // إخفاء قسم الرفع وإظهار قسم التحميل
             document.getElementById('uploadSection').classList.add('hidden');
-            const loadingSection = document.getElementById('loadingSection');
-            loadingSection.classList.remove('hidden');
+            document.getElementById('loadingSection').classList.remove('hidden');
 
-            // تحريك شريط التحميل الوهمي
             const progressBar = document.getElementById('progressBar');
             let progress = 0;
             const progressInterval = setInterval(() => {
@@ -117,7 +112,6 @@
                 }
             }, 300);
 
-            // تجهيز البيانات وإرسالها
             const formData = new FormData();
             formData.append('photo', selectedFile);
 
@@ -127,48 +121,42 @@
                     body: formData
                 });
 
+                // إذا رد السيرفر بخطأ (مثل 502 بسبب الذاكرة)
+                if (!response.ok) {
+                    throw new Error("السيرفر واجه مشكلة (كود: " + response.status + "). يرجى استخدام صورة بحجم أصغر.");
+                }
+
                 const data = await response.json();
 
                 if (!data.ok) {
-                    alert("حدث خطأ أثناء المعالجة: " + (data.error || 'خطأ غير معروف'));
-                    resetApp();
-                    return;
+                    throw new Error("خطأ في المعالجة: " + (data.error || 'خطأ غير معروف'));
                 }
 
-                // إكمال شريط التحميل إلى 100%
                 clearInterval(progressInterval);
                 progressBar.style.width = '100%';
 
-                // الانتظار قليلاً ثم إظهار النتائج
                 setTimeout(() => {
                     showResults(data);
                 }, 500);
 
             } catch (error) {
                 clearInterval(progressInterval);
-                alert("فشل الاتصال بالسيرفر. يرجى المحاولة مرة أخرى.");
+                alert("حدث خطأ: " + error.message + "\n\nيرجى المحاولة مرة أخرى أو استخدام صورة أخرى.");
                 resetApp();
             }
         }
 
-        // دالة عرض النتائج
         function showResults(data) {
             document.getElementById('loadingSection').classList.add('hidden');
-            const resultSection = document.getElementById('resultSection');
-            resultSection.classList.remove('hidden');
+            document.getElementById('resultSection').classList.remove('hidden');
 
-            // عرض الصورة المعدلة
             document.getElementById('resultImage').src = data.result_url;
-
-            // تجهيز رابط التحميل
             document.getElementById('downloadBtn').href = data.download_url;
 
-            // عرض المشاكل (إذا وجدت)
             const issuesContainer = document.getElementById('issuesContainer');
             const issuesList = document.getElementById('issuesList');
             issuesList.innerHTML = '';
 
-            // ترجمة المشاكل من الإنجليزي للعربي
             const translations = {
                 'not_jpeg': 'الملف لم يكن بصيغة JPG',
                 'file_too_large': 'حجم الملف تجاوز 240 كيلوبايت',
@@ -179,8 +167,8 @@
                 'too_dark': 'الصورة كانت داكنة جداً',
                 'overexposed': 'الصورة كانت مفرطة الإضاءة',
                 'low_contrast': 'الصورة كانت منخفضة التباين',
-                'head_proportion': 'نسبة الرأس لم تكن مناسبة',
-                'face_not_found': 'لم يتم التعرف على الوجه بوضوح'
+                'head_proportion': 'نسبة الرأس لم تكن مناسبة (تم تعديلها)',
+                'face_not_found': 'لم يتم التعرف على الوجه بوضوح (تم القص من المنتصف)'
             };
 
             if (data.report.issues && data.report.issues.length > 0) {
@@ -195,7 +183,6 @@
             }
         }
 
-        // دالة إعادة ضبط التطبيق للبدء من جديد
         function resetApp() {
             selectedFile = null;
             document.getElementById('fileInput').value = '';
