@@ -40,8 +40,8 @@ TARGET_SIZE   = 600
 MAX_BYTES     = 240 * 1024
 HEAD_MIN      = 0.50
 HEAD_MAX      = 0.69
-HEAD_TARGET   = 0.58  # جعل الرأس 58% لإظهار الرقبة والكتفين
-HEAD_TOP_POS  = 0.12  # تقليل المساحة العلوية
+HEAD_TARGET   = 0.52  # جعل الرأس 58% لإظهار الرقبة والكتفين
+HEAD_TOP_POS  = 0.08  # تقليل المساحة العلوية
 MAX_AGE_SEC   = 60 * 60
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
