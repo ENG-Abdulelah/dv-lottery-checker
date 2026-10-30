@@ -5,18 +5,209 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>فحص وتعديل صور اللوتري الأمريكي</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Tajawal', sans-serif; background-color: #f3f4f6; }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px; height: 36px;
+            border-radius: 50%;
+            border-left-color: #2563eb;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .progress-bar-container {
+            width: 100%; background-color: #e5e7eb; border-radius: 9999px; height: 8px; overflow: hidden; margin-top: 15px;
+        }
+        .progress-bar {
+            height: 100%; background-color: #2563eb; width: 0%; transition: width 0.3s ease;
+        }
+    </style>
 </head>
-<body class="bg-gray-100 text-gray-800 font-sans min-h-screen flex flex-col items-center justify-center p-4">
-    <div class="bg-white p-8 rounded-2xl shadow-xl max-w-xl w-full text-center">
-        <h1 class="text-2xl font-bold text-blue-600 mb-4">🇺🇸 فحص وتعديل صور اللوتري الأمريكي</h1>
-        <p class="text-gray-600 mb-6">قم برفع صورتك الشخصية وسيقوم النظام بفحصها وتعديلها تلقائياً لتكون مطابقة للشروط الرسمية 100%.</p>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <!-- القسم الرئيسي (رفع الصورة) -->
+    <div id="uploadSection" class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg text-center">
+        <h1 class="text-2xl font-bold text-blue-600 mb-2">فحص وتعديل صور اللوتري الأمريكي 🇺🇸</h1>
+        <p class="text-gray-600 mb-6">قم برفع صورتك الشخصية وسيقوم النظام بفحصها وتعديلها لتكون مطابقة للشروط الرسمية 100%.</p>
         
-        <form action="/api/process" method="POST" enctype="multipart/form-data" class="space-y-4">
-            <input type="file" name="photo" accept="image/*" required class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
-            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition duration-200">
-                فحص وتعديل الصورة الآن
-            </button>
-        </form>
+        <div class="mb-6">
+            <input type="file" id="fileInput" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
+            <label for="fileInput" class="cursor-pointer bg-blue-50 text-blue-600 font-semibold py-3 px-6 rounded-lg border border-blue-200 hover:bg-blue-100 transition inline-block">
+                اختيار صورة من الجهاز
+            </label>
+            <p id="fileName" class="mt-3 text-sm text-gray-500">لم يتم اختيار أي صورة</p>
+        </div>
+
+        <button id="processBtn" onclick="processImage()" disabled class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg opacity-50 cursor-not-allowed transition">
+            فحص وتعديل الصورة الآن
+        </button>
     </div>
+
+    <!-- قسم التحميل (يظهر أثناء المعالجة) -->
+    <div id="loadingSection" class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg text-center hidden">
+        <div class="flex justify-center mb-4">
+            <div class="spinner"></div>
+        </div>
+        <h2 class="text-xl font-bold text-gray-800 mb-2">جاري فحص وتعديل الصورة...</h2>
+        <p class="text-gray-500 text-sm">يرجى الانتظار، قد يستغرق هذا بضع ثوانٍ.</p>
+        <div class="progress-bar-container">
+            <div id="progressBar" class="progress-bar"></div>
+        </div>
+    </div>
+
+    <!-- قسم النتائج (يظهر بعد الانتهاء) -->
+    <div id="resultSection" class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg text-center hidden">
+        <h2 class="text-2xl font-bold text-green-600 mb-4">تم فحص الصورة بنجاح!</h2>
+        
+        <!-- المشاكل المكتشفة -->
+        <div id="issuesContainer" class="bg-red-50 text-red-700 p-4 rounded-lg mb-6 text-right text-sm hidden">
+            <h3 class="font-bold mb-2">المشاكل التي تم اكتشافها وتعديلها:</h3>
+            <ul id="issuesList" class="list-disc list-inside space-y-1"></ul>
+        </div>
+
+        <!-- الصورة المعدلة -->
+        <div class="mb-6">
+            <img id="resultImage" src="" alt="الصورة المعدلة" class="w-full h-auto rounded-lg border shadow-sm mx-auto max-w-xs">
+        </div>
+
+        <!-- أزرار الخيارات -->
+        <div class="flex flex-col gap-3">
+            <a id="downloadBtn" href="#" class="bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                تحميل الصورة المعدلة
+            </a>
+            <button onclick="resetApp()" class="bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 transition">
+                إلغاء وفحص صورة أخرى
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let selectedFile = null;
+
+        // دالة اختيار الملف
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                selectedFile = file;
+                document.getElementById('fileName').textContent = "تم اختيار: " + file.name;
+                const btn = document.getElementById('processBtn');
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        // دالة إرسال الصورة للسيرفر
+        async function processImage() {
+            if (!selectedFile) return;
+
+            // إخفاء قسم الرفع وإظهار قسم التحميل
+            document.getElementById('uploadSection').classList.add('hidden');
+            const loadingSection = document.getElementById('loadingSection');
+            loadingSection.classList.remove('hidden');
+
+            // تحريك شريط التحميل الوهمي
+            const progressBar = document.getElementById('progressBar');
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                if (progress < 90) {
+                    progress += 10;
+                    progressBar.style.width = progress + '%';
+                }
+            }, 300);
+
+            // تجهيز البيانات وإرسالها
+            const formData = new FormData();
+            formData.append('photo', selectedFile);
+
+            try {
+                const response = await fetch('/api/process', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (!data.ok) {
+                    alert("حدث خطأ أثناء المعالجة: " + (data.error || 'خطأ غير معروف'));
+                    resetApp();
+                    return;
+                }
+
+                // إكمال شريط التحميل إلى 100%
+                clearInterval(progressInterval);
+                progressBar.style.width = '100%';
+
+                // الانتظار قليلاً ثم إظهار النتائج
+                setTimeout(() => {
+                    showResults(data);
+                }, 500);
+
+            } catch (error) {
+                clearInterval(progressInterval);
+                alert("فشل الاتصال بالسيرفر. يرجى المحاولة مرة أخرى.");
+                resetApp();
+            }
+        }
+
+        // دالة عرض النتائج
+        function showResults(data) {
+            document.getElementById('loadingSection').classList.add('hidden');
+            const resultSection = document.getElementById('resultSection');
+            resultSection.classList.remove('hidden');
+
+            // عرض الصورة المعدلة
+            document.getElementById('resultImage').src = data.result_url;
+
+            // تجهيز رابط التحميل
+            document.getElementById('downloadBtn').href = data.download_url;
+
+            // عرض المشاكل (إذا وجدت)
+            const issuesContainer = document.getElementById('issuesContainer');
+            const issuesList = document.getElementById('issuesList');
+            issuesList.innerHTML = '';
+
+            // ترجمة المشاكل من الإنجليزي للعربي
+            const translations = {
+                'not_jpeg': 'الملف لم يكن بصيغة JPG',
+                'file_too_large': 'حجم الملف تجاوز 240 كيلوبايت',
+                'not_square': 'الصورة لم تكن مربعة',
+                'low_resolution': 'دقة الصورة منخفضة',
+                'bg_not_white': 'الخلفية لم تكن بيضاء نقية',
+                'bg_shadows': 'وجود ظلال في الخلفية',
+                'too_dark': 'الصورة كانت داكنة جداً',
+                'overexposed': 'الصورة كانت مفرطة الإضاءة',
+                'low_contrast': 'الصورة كانت منخفضة التباين',
+                'head_proportion': 'نسبة الرأس لم تكن مناسبة',
+                'face_not_found': 'لم يتم التعرف على الوجه بوضوح'
+            };
+
+            if (data.report.issues && data.report.issues.length > 0) {
+                data.report.issues.forEach(issue => {
+                    const li = document.createElement('li');
+                    li.textContent = translations[issue] || issue;
+                    issuesList.appendChild(li);
+                });
+                issuesContainer.classList.remove('hidden');
+            } else {
+                issuesContainer.classList.add('hidden');
+            }
+        }
+
+        // دالة إعادة ضبط التطبيق للبدء من جديد
+        function resetApp() {
+            selectedFile = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('fileName').textContent = "لم يتم اختيار أي صورة";
+            document.getElementById('processBtn').disabled = true;
+            document.getElementById('processBtn').classList.add('opacity-50', 'cursor-not-allowed');
+            document.getElementById('progressBar').style.width = '0%';
+            
+            document.getElementById('resultSection').classList.add('hidden');
+            document.getElementById('loadingSection').classList.add('hidden');
+            document.getElementById('uploadSection').classList.remove('hidden');
+        }
+    </script>
 </body>
 </html>
