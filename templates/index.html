@@ -24,17 +24,81 @@
         }
     </style>
 </head>
-<body class="min-h-screen flex flex-col items-center justify-center p-4">
+<body class="min-h-screen flex flex-col items-center py-10 px-4">
 
-    <div class="w-full max-w-lg">
+    <div class="w-full max-w-2xl">
+        
+        <!-- قسم شروط القرعة -->
+        <div class="bg-gradient-to-br from-blue-700 to-blue-900 rounded-2xl shadow-xl p-6 md:p-8 text-white mb-8">
+            <h1 class="text-2xl md:text-3xl font-bold mb-6 text-center flex items-center justify-center gap-2">
+                <span>🇺🇸 شروط ومتطلبات قرعة الهجرة الأمريكية (DV Lottery)</span>
+            </h1>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <!-- الشروط الأساسية -->
+                <div class="bg-white/10 p-4 rounded-xl backdrop-blur-sm border border-white/20">
+                    <h3 class="font-bold text-lg mb-3 text-blue-200">شروط التقديم:</h3>
+                    <ul class="space-y-2 text-sm md:text-base">
+                        <li class="flex items-start gap-2">
+                            <span class="text-green-400 mt-1">✔</span>
+                            <span>أن تكون مولوداً في دولة مؤهلة للقرعة.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-green-400 mt-1">✔</span>
+                            <span>أن تحمل شهادة الثانوية العامة أو ما يعادلها، أو خبرة عمل لمدة سنتين خلال آخر 5 سنوات.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-green-400 mt-1">✔</span>
+                            <span>امتلاك جواز سفر ساري المفعول.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-green-400 mt-1">✔</span>
+                            <span>إدخال بيانات الزوج/الزوجة وجميع الأبناء غير المتزوجين تحت 21 عاماً.</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- شروط الصورة -->
+                <div class="bg-white/10 p-4 rounded-xl backdrop-blur-sm border border-white/20">
+                    <h3 class="font-bold text-lg mb-3 text-blue-200">شروط الصورة:</h3>
+                    <ul class="space-y-2 text-sm md:text-base">
+                        <li class="flex items-start gap-2">
+                            <span class="text-green-400 mt-1">✔</span>
+                            <span>خلفية بيضاء سادة، بدون ظلال أو أشخاص آخرين.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-green-400 mt-1">✔</span>
+                            <span>مربعة تماماً (600x600) وبصيغة JPG وحجم أقل من 240KB.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-green-400 mt-1">✔</span>
+                            <span>بدون نظارات، وتعبير محايد (بدون ابتسامة).</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-green-400 mt-1">✔</span>
+                            <span>حديثة (خلال آخر 6 أشهر) وبدون فلاتر أو تعديلات تغير الملامح.</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- زر موقع التسجيل -->
+            <div class="text-center mt-6">
+                <a href="https://dvprogram.state.gov/" target="_blank" class="inline-flex items-center justify-center gap-2 bg-yellow-500 hover:bg-yellow-400 text-blue-900 font-bold py-3 px-8 rounded-full shadow-lg transition transform hover:scale-105">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                    الانتقال لموقع التسجيل الرسمي
+                </a>
+            </div>
+        </div>
+
         <!-- قسم رفع الصورة -->
-        <div id="uploadSection" class="bg-white rounded-2xl shadow-xl p-8 text-center">
-            <h1 class="text-2xl font-bold text-blue-600 mb-2">فحص وتعديل صور اللوتري الأمريكي 🇺🇸</h1>
-            <p class="text-gray-600 mb-4">قم برفع صورتك الشخصية وسيقوم النظام بفحصها وتعديلها لتكون مطابقة للشروط الرسمية 100%.</p>
+        <div id="uploadSection" class="bg-white rounded-2xl shadow-xl p-8 text-center mb-8">
+            <h2 class="text-2xl font-bold text-blue-600 mb-2">فحص وتعديل صورتك الآن</h2>
+            <p class="text-gray-600 mb-4">قم برفع صورتك الشخصية وسيقوم النظام بفحصها وتعديلها لتكون مطابقة للشروط.</p>
             
             <div class="bg-yellow-50 border-r-4 border-yellow-400 p-4 mb-6 text-sm text-yellow-800 text-right rounded-l-lg">
-                <p class="font-bold mb-1">⚠️ ملاحظة هامة جداً:</p>
-                <p>للحصول على أفضل نتيجة، يرجى رفع صورة تكون مأخوذة من مسافة متوسطة (تظهر الرأس، الرقبة، وجزء من الصدر والكتفين). الصور المأخوذة عن قرب (سيلفي) قد تظهر بحواف مقطوعة.</p>
+                <p class="font-bold mb-1">⚠️ ملاحظة هامة:</p>
+                <p>للحصول على أفضل نتيجة، يرجى رفع صورة مأخوذة من مسافة متوسطة (تظهر الرأس، الرقبة، وجزء من الصدر والكتفين).</p>
             </div>
 
             <div class="mb-6">
@@ -51,7 +115,7 @@
         </div>
 
         <!-- قسم التحميل -->
-        <div id="loadingSection" class="bg-white rounded-2xl shadow-xl p-8 text-center hidden">
+        <div id="loadingSection" class="bg-white rounded-2xl shadow-xl p-8 text-center hidden mb-8">
             <div class="flex justify-center mb-4">
                 <div class="spinner"></div>
             </div>
@@ -63,7 +127,7 @@
         </div>
 
         <!-- قسم النتائج -->
-        <div id="resultSection" class="bg-white rounded-2xl shadow-xl p-8 text-center hidden">
+        <div id="resultSection" class="bg-white rounded-2xl shadow-xl p-8 text-center hidden mb-8">
             <h2 class="text-2xl font-bold text-green-600 mb-4">تم فحص الصورة بنجاح!</h2>
             
             <div id="issuesContainer" class="bg-red-50 text-red-700 p-4 rounded-lg mb-6 text-right text-sm hidden">
@@ -76,7 +140,7 @@
                 <img id="resultImage" src="" alt="الصورة المعدلة" class="w-full h-auto rounded-lg border shadow-sm mx-auto max-w-xs">
                 <!-- مفتاح الخطوط -->
                 <div class="mt-4 text-xs text-gray-600 flex flex-wrap justify-center gap-4 bg-gray-50 p-2 rounded">
-                    <div class="flex items-center gap-1"><span class="w-3 h-3 bg-red-500 block rounded-full"></span> حدود الرأس (50%-69%)</div>
+                    <div class="flex items-center gap-1"><span class="w-3 h-3 bg-red-500 block rounded-full"></span> حدود الرأس</div>
                     <div class="flex items-center gap-1"><span class="w-3 h-3 bg-green-500 block rounded-full"></span> مستوى العينين</div>
                     <div class="flex items-center gap-1"><span class="w-3 h-3 bg-blue-500 block rounded-full"></span> إطار الوجه</div>
                 </div>
@@ -93,8 +157,16 @@
             </div>
         </div>
         
-        <footer class="mt-8 text-center text-gray-500 text-sm">
-            <p>تم التطوير بواسطة: <span class="font-bold text-gray-700">المهندس عبدالاله صادق</span></p>
+        <!-- الفوتر والرسالة التشجيعية -->
+        <footer class="mt-12 text-center bg-gray-800 text-gray-300 p-6 rounded-2xl shadow-lg">
+            <p class="text-lg font-bold text-white mb-2">رسالة تشجيعية 🌚</p>
+            <p class="mb-4 text-sm md:text-base leading-relaxed">
+                "لا تفقد الأمل، الفرصة تأتي مرة واحدة في العمر، جرب حظك فالحياة مليئة بالمفاجآت الجميلة. 
+                ابدأ رحلتك نحو حياة جديدة، وجهز أوراقك بثقة، وبالتوفيق للجميع!"
+            </p>
+            <div class="border-t border-gray-600 pt-4 mt-4">
+                <p class="text-sm">تم التطوير بواسطة: <span class="font-bold text-blue-400">المهندس عبدالاله صادق</span></p>
+            </div>
         </footer>
     </div>
 
@@ -151,9 +223,7 @@
             document.getElementById('loadingSection').classList.add('hidden');
             document.getElementById('resultSection').classList.remove('hidden');
 
-            // عرض الصورة التي تحتوي على الخطوط الإرشادية
             document.getElementById('resultImage').src = data.result_url;
-            // رابط التحميل للصورة النظيفة
             document.getElementById('downloadBtn').href = data.download_url;
 
             const issuesContainer = document.getElementById('issuesContainer');
